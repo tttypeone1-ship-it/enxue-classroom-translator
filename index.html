@@ -47,6 +47,22 @@
         </button>
       </section>
 
+      <section class="content-area" aria-label="翻译内容">
+        <article class="text-panel">
+          <div class="panel-head">
+            <span class="panel-label" id="sourceLabel">原文</span>
+          </div>
+          <p id="sourceText">请选择方向后，点击上方按钮开始。</p>
+        </article>
+        <article class="text-panel translated">
+          <div class="panel-head">
+            <span class="panel-label" id="translatedLabel">译文</span>
+            <button class="secondary-action" id="playButton" type="button" disabled>播放译文</button>
+          </div>
+          <p id="translatedText">翻译结果会显示在这里。</p>
+        </article>
+      </section>
+
       <section class="speak-actions" aria-label="主操作按钮">
         <p class="mic-hint" id="micHint" aria-live="polite"></p>
         <button class="speak-button" id="mainSpeakButton" type="button">
@@ -63,22 +79,6 @@
             <i></i>
           </span>
         </div>
-      </section>
-
-      <section class="content-area" aria-label="翻译内容">
-        <article class="text-panel">
-          <div class="panel-head">
-            <span class="panel-label" id="sourceLabel">原文</span>
-          </div>
-          <p id="sourceText">请选择方向后，点击上方按钮开始。</p>
-        </article>
-        <article class="text-panel translated">
-          <div class="panel-head">
-            <span class="panel-label" id="translatedLabel">译文</span>
-            <button class="secondary-action" id="playButton" type="button" disabled>播放译文</button>
-          </div>
-          <p id="translatedText">翻译结果会显示在这里。</p>
-        </article>
       </section>
 
       <footer class="privacy-note">

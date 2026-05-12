@@ -16,7 +16,7 @@
   --gold: #bd8a2f;
   --shadow: 0 14px 32px rgba(37, 43, 48, 0.12);
   --recorder-size: 136px;
-  --recorder-dock-height: 206px;
+  --recorder-dock-height: 210px;
 }
 
 * {
@@ -165,9 +165,8 @@ h2 {
 
 .translator-view {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) var(--recorder-dock-height);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
-  padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
 }
 
@@ -221,6 +220,7 @@ h2 {
   gap: 9px;
   min-height: 0;
   overflow: hidden;
+  padding-bottom: calc(var(--recorder-dock-height) + 12px);
 }
 
 .text-panel {
@@ -283,17 +283,18 @@ h2 {
 }
 
 .speak-actions {
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 5;
-  width: 100%;
-  height: var(--recorder-dock-height);
+  width: min(100%, 720px);
   display: grid;
   justify-items: center;
   align-content: end;
   grid-template-rows: 26px var(--recorder-size) 22px;
   gap: 6px;
-  padding: 8px 0 10px;
+  padding: 8px 16px 10px;
   pointer-events: none;
 }
 
@@ -301,9 +302,9 @@ h2 {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: calc(-1 * env(safe-area-inset-bottom));
-  width: 100vw;
-  height: calc(var(--recorder-dock-height) + 30px + env(safe-area-inset-bottom));
+  bottom: -30px;
+  width: 200%;
+  height: calc(var(--recorder-dock-height) + 60px);
   transform: translateX(-50%);
   background: linear-gradient(180deg, rgba(245, 241, 232, 0), rgba(245, 241, 232, 0.96) 34%, var(--bg));
   z-index: -1;
@@ -480,10 +481,6 @@ h2 {
 @media (max-width: 380px) {
   .app-shell {
     padding: 15px 14px;
-  }
-
-  .translator-view {
-    grid-template-rows: auto auto minmax(0, 1fr) var(--recorder-dock-height);
   }
 
   .brand-block,
