@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enxue 课堂双向翻译器 Beta</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="home-view" id="homeView" aria-labelledby="homeTitle">
+      <div class="brand-block">
+        <h1 id="homeTitle">Enxue 课堂双向翻译器 Beta</h1>
+      </div>
+      <button class="primary-action" id="startButton" type="button">开始使用</button>
+    </section>
+
+    <section class="modal-layer is-hidden" id="introModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-card">
+        <h2 id="modalTitle">开始前说明</h2>
+        <div class="modal-copy">
+          <p>当前为 Beta 原型。本版本暂使用模拟识别结果演示流程。</p>
+          <p>点击录制时会请求麦克风权限，仅用于音量反馈。</p>
+          <p>不会录音、不会上传、不会保存历史记录。</p>
+          <p>This is a Beta prototype. This version uses simulated recognition results for demonstration.</p>
+          <p>It requests microphone permission only for volume feedback.</p>
+          <p>It does not record, upload, or save history.</p>
+        </div>
+        <button class="modal-action" id="confirmStartButton" type="button">
+          我知道了，开始使用<br>
+          <span>Got it, start</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="translator-view is-hidden" id="translatorView" aria-labelledby="mainTitle">
+      <header class="top-bar">
+        <h2 id="mainTitle">Enxue 课堂双向翻译器 Beta</h2>
+      </header>
+
+      <section class="direction-switch" aria-label="语言方向切换">
+        <button class="direction-button is-active" id="modeChinese" type="button" data-mode="chinese">
+          中文 → English
+        </button>
+        <button class="direction-button" id="modeEnglish" type="button" data-mode="english">
+          English → 中文
+        </button>
+      </section>
+
+      <section class="speak-actions" aria-label="主操作按钮">
+        <p class="mic-hint" id="micHint" aria-live="polite"></p>
+        <button class="speak-button" id="mainSpeakButton" type="button">
+          <span id="mainSpeakText">点击开始说中文</span>
+          <strong id="mainSpeakDirection">→ English</strong>
+        </button>
+        <div class="listening-feedback" id="listeningFeedback" aria-hidden="true">
+          <span class="pulse-dot"></span>
+          <span id="listeningFeedbackText">正在聆听，现在可以说话</span>
+          <span class="wave-bars" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
+        </div>
+      </section>
+
+      <section class="content-area" aria-label="翻译内容">
+        <article class="text-panel">
+          <span class="panel-label" id="sourceLabel">原文</span>
+          <p id="sourceText">请选择方向后，点击上方按钮开始。</p>
+        </article>
+        <article class="text-panel translated">
+          <span class="panel-label" id="translatedLabel">译文</span>
+          <p id="translatedText">翻译结果会显示在这里。</p>
+        </article>
+      </section>
+
+      <section class="result-actions">
+        <button class="secondary-action" id="playButton" type="button" disabled>播放译文</button>
+      </section>
+
+      <footer class="privacy-note">
+        Beta prototype · Simulated demo only
+      </footer>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
