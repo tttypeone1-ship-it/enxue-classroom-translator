@@ -60,10 +60,6 @@ button {
   gap: 38px;
 }
 
-.is-hidden {
-  display: none;
-}
-
 .brand-block,
 .top-bar {
   border-left: 5px solid var(--gold);
@@ -168,6 +164,10 @@ h2 {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
   overflow: hidden;
+}
+
+.is-hidden {
+  display: none;
 }
 
 .direction-switch {

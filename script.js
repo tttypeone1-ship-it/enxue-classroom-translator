@@ -17,6 +17,9 @@ const listeningFeedbackText = document.querySelector("#listeningFeedbackText");
 const micHint = document.querySelector("#micHint");
 const playButton = document.querySelector("#playButton");
 
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechSupported = !!SpeechRecognition;
+
 const samples = {
   chinese: {
     source: "同学们，今天我们讲解颈椎的基本检查方法。",
@@ -48,8 +51,10 @@ const uiText = {
     micDenied: "麦克风权限未开启，请允许浏览器使用麦克风",
     sourcePlaceholder: "选择方向后，点击下方圆形按钮。",
     translatedPlaceholder: "译文会显示在这里。",
-    recognizing: "正在整理模拟识别结果...",
-    translating: "正在翻译..."
+    recognizing: "正在识别语音...",
+    translating: "正在翻译...",
+    noSpeech: "未识别到清晰语音，请再试一次",
+    speechNotSupported: "当前浏览器不支持语音识别，请尝试 Safari 或 Chrome。"
   },
   english: {
     sourceLabel: "Original",
@@ -70,8 +75,10 @@ const uiText = {
     micDenied: "Microphone permission is not enabled. Please allow microphone access.",
     sourcePlaceholder: "Choose a direction, then tap the round button below.",
     translatedPlaceholder: "The translation will appear here.",
-    recognizing: "Preparing simulated recognition result...",
-    translating: "Translating..."
+    recognizing: "Recognizing speech...",
+    translating: "Translating...",
+    noSpeech: "No clear speech recognized. Please try again.",
+    speechNotSupported: "Speech recognition is not supported in this browser. Please try Safari or Chrome."
   }
 };
 
@@ -88,6 +95,9 @@ let audioSource = null;
 let volumeData = null;
 let volumeFrame = null;
 let micHintType = null;
+let recognition = null;
+let recognizedText = "";
+let hasRecognitionResult = false;
 
 function clearFlowTimer() {
   if (flowTimer) {
@@ -214,13 +224,79 @@ async function connectMicrophone() {
   readVolume();
 }
 
+function startRecognition() {
+  if (!speechSupported) {
+    return;
+  }
+
+  recognizedText = "";
+  hasRecognitionResult = false;
+
+  const lang = currentMode === "chinese" ? "zh-CN" : "en-US";
+
+  recognition = new SpeechRecognition();
+  recognition.lang = lang;
+  recognition.interimResults = true;
+  recognition.continuous = true;
+
+  recognition.onresult = (event) => {
+    let interim = "";
+    let final = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        final += transcript;
+      } else {
+        interim += transcript;
+      }
+    }
+
+    if (final) {
+      recognizedText = final;
+      hasRecognitionResult = true;
+      sourceText.textContent = recognizedText;
+    } else if (interim) {
+      sourceText.textContent = interim;
+    }
+  };
+
+  recognition.onerror = (event) => {
+    if (event.error === "no-speech" || event.error === "aborted") {
+      return;
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (error) {
+    // SpeechRecognition may fail to start in some browsers.
+  }
+}
+
+function stopRecognition() {
+  if (recognition) {
+    try {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.stop();
+    } catch (error) {
+      // May already be stopped.
+    }
+    recognition = null;
+  }
+}
+
 function resetContent() {
   clearFlowTimer();
+  stopRecognition();
   stopMicrophone();
   isListening = false;
   isProcessing = false;
   isRequestingMic = false;
   hasResult = false;
+  recognizedText = "";
+  hasRecognitionResult = false;
   setMicHint("");
   sourceText.textContent = uiText[currentMode].sourcePlaceholder;
   translatedText.textContent = uiText[currentMode].translatedPlaceholder;
@@ -231,33 +307,39 @@ function resetContent() {
 
 function runMockFlow(language) {
   const sample = samples[language];
+  const text = uiText[language];
 
   isProcessing = true;
-  const text = uiText[language];
   setMicHint("");
   playButton.disabled = true;
   mainSpeakButton.disabled = true;
-  sourceText.textContent = text.recognizing;
+
+  // If speech was recognized, show it directly; otherwise show no-speech message.
+  if (hasRecognitionResult && recognizedText) {
+    sourceText.textContent = recognizedText;
+  } else if (!speechSupported) {
+    sourceText.textContent = text.speechNotSupported;
+  } else {
+    sourceText.textContent = text.noSpeech;
+  }
+
   translatedText.textContent = text.translating;
   updateMainButton();
 
   flowTimer = setTimeout(() => {
-    sourceText.textContent = sample.source;
-
-    flowTimer = setTimeout(() => {
-      translatedText.textContent = sample.translated;
-      playButton.disabled = false;
-      mainSpeakButton.disabled = false;
-      isProcessing = false;
-      hasResult = true;
-      flowTimer = null;
-      updateMainButton();
-    }, 750);
+    translatedText.textContent = sample.translated;
+    playButton.disabled = false;
+    mainSpeakButton.disabled = false;
+    isProcessing = false;
+    hasResult = true;
+    flowTimer = null;
+    updateMainButton();
   }, 750);
 }
 
 async function startListening() {
   clearFlowTimer();
+
   isRequestingMic = true;
   setMicHint(uiText[currentMode].micRequesting, false, "requesting");
   playButton.disabled = true;
@@ -266,7 +348,12 @@ async function startListening() {
   try {
     await connectMicrophone();
     isListening = true;
-    setMicHint(uiText[currentMode].micConnected, false, "connected");
+    if (speechSupported) {
+      setMicHint(uiText[currentMode].micConnected, false, "connected");
+    } else {
+      setMicHint(uiText[currentMode].speechNotSupported, true, "unsupported");
+    }
+    startRecognition();
   } catch (error) {
     await stopMicrophone();
     setMicHint(uiText[currentMode].micDenied, true, "denied");
@@ -279,6 +366,7 @@ async function startListening() {
 async function stopListening() {
   isListening = false;
   setMicHint("");
+  stopRecognition();
   await stopMicrophone();
   updateMainButton();
   runMockFlow(currentMode);
