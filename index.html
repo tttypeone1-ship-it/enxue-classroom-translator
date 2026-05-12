@@ -50,8 +50,8 @@
       <section class="speak-actions" aria-label="主操作按钮">
         <p class="mic-hint" id="micHint" aria-live="polite"></p>
         <button class="speak-button" id="mainSpeakButton" type="button">
-          <span id="mainSpeakText">点击开始说中文</span>
-          <strong id="mainSpeakDirection">→ English</strong>
+          <span id="mainSpeakText">开始</span>
+          <strong id="mainSpeakDirection">说中文</strong>
         </button>
         <div class="listening-feedback" id="listeningFeedback" aria-hidden="true">
           <span class="pulse-dot"></span>
@@ -67,17 +67,18 @@
 
       <section class="content-area" aria-label="翻译内容">
         <article class="text-panel">
-          <span class="panel-label" id="sourceLabel">原文</span>
+          <div class="panel-head">
+            <span class="panel-label" id="sourceLabel">原文</span>
+          </div>
           <p id="sourceText">请选择方向后，点击上方按钮开始。</p>
         </article>
         <article class="text-panel translated">
-          <span class="panel-label" id="translatedLabel">译文</span>
+          <div class="panel-head">
+            <span class="panel-label" id="translatedLabel">译文</span>
+            <button class="secondary-action" id="playButton" type="button" disabled>播放译文</button>
+          </div>
           <p id="translatedText">翻译结果会显示在这里。</p>
         </article>
-      </section>
-
-      <section class="result-actions">
-        <button class="secondary-action" id="playButton" type="button" disabled>播放译文</button>
       </section>
 
       <footer class="privacy-note">

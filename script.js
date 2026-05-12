@@ -34,10 +34,14 @@ const uiText = {
     translatedLabel: "译文",
     play: "播放译文",
     playing: "正在播放",
-    start: "点击开始说中文",
-    listening: "正在聆听，点击结束",
+    start: "开始",
+    startSub: "说中文",
+    listening: "结束",
+    listeningSub: "录制",
     requesting: "正在连接麦克风...",
+    requestingSub: "",
     processing: "正在处理...",
+    processingSub: "",
     listeningFeedback: "正在聆听，现在可以说话",
     micRequesting: "正在请求麦克风权限...",
     micConnected: "麦克风已连接，正在聆听",
@@ -52,10 +56,14 @@ const uiText = {
     translatedLabel: "Translation",
     play: "Play translation",
     playing: "Playing",
-    start: "Tap to speak English",
-    listening: "Listening... Tap to finish",
+    start: "Start",
+    startSub: "English",
+    listening: "Finish",
+    listeningSub: "",
     requesting: "Connecting microphone...",
+    requestingSub: "",
     processing: "Processing...",
+    processingSub: "",
     listeningFeedback: "Listening now. Please speak.",
     micRequesting: "Requesting microphone permission...",
     micConnected: "Microphone connected. Listening...",
@@ -100,24 +108,27 @@ function updateMainButton() {
   sourceLabel.textContent = text.sourceLabel;
   translatedLabel.textContent = text.translatedLabel;
   listeningFeedbackText.textContent = text.listeningFeedback;
-  mainSpeakDirection.textContent = isChineseMode ? "→ English" : "→ 中文";
 
   if (isListening) {
     mainSpeakText.textContent = text.listening;
+    mainSpeakDirection.textContent = text.listeningSub;
     return;
   }
 
   if (isRequestingMic) {
     mainSpeakText.textContent = text.requesting;
+    mainSpeakDirection.textContent = text.requestingSub;
     return;
   }
 
   if (isProcessing) {
     mainSpeakText.textContent = text.processing;
+    mainSpeakDirection.textContent = text.processingSub;
     return;
   }
 
   mainSpeakText.textContent = text.start;
+  mainSpeakDirection.textContent = text.startSub;
   playButton.textContent = text.play;
 }
 
@@ -130,8 +141,6 @@ function setMicHint(text, isWarning = false, type = null) {
 function setMicLevel(level) {
   const normalized = Math.max(0, Math.min(level, 1));
   document.documentElement.style.setProperty("--mic-level", normalized.toFixed(3));
-  document.documentElement.style.setProperty("--mic-glow", (0.35 + normalized * 0.55).toFixed(3));
-  document.documentElement.style.setProperty("--mic-glow-scale", (0.98 + normalized * 0.12).toFixed(3));
 }
 
 function readVolume() {

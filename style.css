@@ -15,6 +15,8 @@
   --orange-soft: rgba(201, 120, 63, 0.22);
   --gold: #bd8a2f;
   --shadow: 0 14px 32px rgba(37, 43, 48, 0.12);
+  --recorder-size: 136px;
+  --recorder-dock-height: 206px;
 }
 
 * {
@@ -38,14 +40,17 @@ button {
 
 .app-shell {
   width: min(100%, 720px);
+  height: 100vh;
   min-height: 100vh;
   margin: 0 auto;
-  padding: 18px 16px;
+  padding: 14px 16px 0;
+  overflow: hidden;
 }
 
 .home-view,
 .translator-view {
-  min-height: calc(100vh - 36px);
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -79,7 +84,7 @@ h1 {
 }
 
 h2 {
-  font-size: 25px;
+  font-size: 21px;
 }
 
 .primary-action,
@@ -159,8 +164,11 @@ h2 {
 }
 
 .translator-view {
-  gap: 11px;
-  padding-bottom: calc(320px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) var(--recorder-dock-height);
+  gap: 8px;
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
 }
 
 .direction-switch {
@@ -171,8 +179,8 @@ h2 {
 
 .direction-button {
   min-width: 0;
-  min-height: 46px;
-  padding: 7px 8px;
+  min-height: 42px;
+  padding: 6px 8px;
   background: #ece7dc;
   color: #586069;
   font-size: 17px;
@@ -209,20 +217,22 @@ h2 {
 
 .content-area {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 9px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .text-panel {
-  min-height: 82px;
-  max-height: 22vh;
+  min-height: 0;
+  max-height: none;
   padding: 12px 13px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .text-panel.translated {
@@ -236,26 +246,33 @@ h2 {
   font-weight: 800;
 }
 
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
 .text-panel p {
   margin: 6px 0 0;
   font-size: 19px;
   font-weight: 700;
   line-height: 1.42;
   overflow-wrap: anywhere;
-}
-
-.result-actions {
-  display: grid;
-  position: relative;
-  z-index: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .secondary-action {
-  width: 100%;
-  min-height: 52px;
+  width: auto;
+  min-width: 96px;
+  min-height: 34px;
+  padding: 6px 10px;
   background: var(--blue);
   color: white;
-  font-size: 19px;
+  font-size: 14px;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -266,17 +283,17 @@ h2 {
 }
 
 .speak-actions {
-  position: fixed;
-  left: 50%;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: 0;
   z-index: 5;
-  width: min(100% - 32px, 720px);
-  transform: translateX(-50%);
+  width: 100%;
+  height: var(--recorder-dock-height);
   display: grid;
   justify-items: center;
-  grid-template-rows: auto 28px;
-  gap: 8px;
-  padding: 10px 0 2px;
+  align-content: end;
+  grid-template-rows: 26px var(--recorder-size) 22px;
+  gap: 6px;
+  padding: 8px 0 10px;
   pointer-events: none;
 }
 
@@ -284,9 +301,9 @@ h2 {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: calc(-18px - env(safe-area-inset-bottom));
+  bottom: calc(-1 * env(safe-area-inset-bottom));
   width: 100vw;
-  height: 250px;
+  height: calc(var(--recorder-dock-height) + 30px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   background: linear-gradient(180deg, rgba(245, 241, 232, 0), rgba(245, 241, 232, 0.96) 34%, var(--bg));
   z-index: -1;
@@ -298,11 +315,8 @@ h2 {
 }
 
 .mic-hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(min(64vw, 230px) + 52px);
   min-height: 24px;
+  max-width: min(100%, 520px);
   margin: 0;
   color: var(--orange-dark);
   font-size: 14px;
@@ -317,10 +331,10 @@ h2 {
 
 .speak-button {
   position: relative;
-  width: min(64vw, 230px);
+  width: min(40vw, var(--recorder-size));
   aspect-ratio: 1;
-  min-width: 188px;
-  min-height: 188px;
+  min-width: 132px;
+  min-height: 132px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -341,12 +355,10 @@ h2 {
   opacity: 0;
   transform: scale(0.96);
   z-index: -1;
-  transition: opacity 90ms linear, transform 90ms linear;
 }
 
 .speak-button.is-pressed::before {
-  opacity: var(--mic-glow, 0.45);
-  transform: scale(var(--mic-glow-scale, 1));
+  animation: record-glow 1.35s ease-in-out infinite;
 }
 
 .speak-button span,
@@ -356,13 +368,13 @@ h2 {
 }
 
 .speak-button span {
-  font-size: 23px;
+  font-size: 21px;
   font-weight: 900;
 }
 
 .speak-button strong {
-  margin-top: 8px;
-  font-size: 26px;
+  margin-top: 4px;
+  font-size: 19px;
 }
 
 .speak-button.is-pressed {
@@ -430,10 +442,7 @@ h2 {
 }
 
 .privacy-note {
-  margin: 4px 0 0;
-  color: rgba(101, 108, 114, 0.68);
-  font-size: 12px;
-  text-align: center;
+  display: none;
 }
 
 @keyframes record-glow {
@@ -474,7 +483,7 @@ h2 {
   }
 
   .translator-view {
-    padding-bottom: calc(300px + env(safe-area-inset-bottom));
+    grid-template-rows: auto auto minmax(0, 1fr) var(--recorder-dock-height);
   }
 
   .brand-block,
@@ -483,7 +492,7 @@ h2 {
   }
 
   h2 {
-    font-size: 23px;
+    font-size: 21px;
   }
 
   .direction-button {
@@ -495,24 +504,20 @@ h2 {
   }
 
   .text-panel {
-    max-height: 20vh;
+    max-height: none;
   }
 
   .speak-button {
-    width: min(66vw, 214px);
-    min-width: 176px;
-    min-height: 176px;
-  }
-
-  .mic-hint {
-    bottom: calc(min(66vw, 214px) + 48px);
+    width: min(40vw, var(--recorder-size));
+    min-width: 128px;
+    min-height: 128px;
   }
 
   .speak-button span {
-    font-size: 21px;
+    font-size: 20px;
   }
 
   .speak-button strong {
-    font-size: 24px;
+    font-size: 18px;
   }
 }
