@@ -54,6 +54,7 @@ const uiText = {
     recognizing: "正在识别语音...",
     translating: "正在翻译...",
     noSpeech: "未识别到清晰语音，请再试一次",
+    noTranslation: "请重新录制后再查看译文",
     speechNotSupported: "当前浏览器不支持语音识别，请尝试 Safari 或 Chrome。"
   },
   english: {
@@ -78,6 +79,7 @@ const uiText = {
     recognizing: "Recognizing speech...",
     translating: "Translating...",
     noSpeech: "No clear speech recognized. Please try again.",
+    noTranslation: "Please try again before viewing the translation.",
     speechNotSupported: "Speech recognition is not supported in this browser. Please try Safari or Chrome."
   }
 };
@@ -96,13 +98,26 @@ let volumeData = null;
 let volumeFrame = null;
 let micHintType = null;
 let recognition = null;
-let recognizedText = "";
-let hasRecognitionResult = false;
+let recognitionEndTimer = null;
+
+// Speech recognition result accumulation — multi-layered for iOS/webkit resilience.
+// These are ONLY reset in startRecognition() (new recording start), never during stop/cleanup.
+let finalTranscript = "";
+let latestInterimTranscript = "";
+let latestRecognizedDraft = "";
+let lastDisplayedTranscript = "";
 
 function clearFlowTimer() {
   if (flowTimer) {
     clearTimeout(flowTimer);
     flowTimer = null;
+  }
+}
+
+function clearRecognitionEndTimer() {
+  if (recognitionEndTimer) {
+    clearTimeout(recognitionEndTimer);
+    recognitionEndTimer = null;
   }
 }
 
@@ -224,13 +239,25 @@ async function connectMicrophone() {
   readVolume();
 }
 
+function updateSourceDisplay() {
+  const displayed = finalTranscript + latestInterimTranscript;
+  sourceText.textContent = displayed;
+  // Snapshot every displayed text so it survives if engine stops without final.
+  if (displayed) {
+    lastDisplayedTranscript = displayed;
+  }
+}
+
 function startRecognition() {
   if (!speechSupported) {
     return;
   }
 
-  recognizedText = "";
-  hasRecognitionResult = false;
+  // Reset all transcript layers ONLY at the start of a new recording.
+  finalTranscript = "";
+  latestInterimTranscript = "";
+  latestRecognizedDraft = "";
+  lastDisplayedTranscript = "";
 
   const lang = currentMode === "chinese" ? "zh-CN" : "en-US";
 
@@ -241,30 +268,46 @@ function startRecognition() {
 
   recognition.onresult = (event) => {
     let interim = "";
-    let final = "";
 
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
-        final += transcript;
+        finalTranscript += transcript;
+        latestInterimTranscript = "";
       } else {
         interim += transcript;
       }
     }
 
-    if (final) {
-      recognizedText = final;
-      hasRecognitionResult = true;
-      sourceText.textContent = recognizedText;
-    } else if (interim) {
-      sourceText.textContent = interim;
+    if (interim) {
+      latestInterimTranscript = interim;
     }
+
+    // Save any non-empty transcript as draft, regardless of final/interim.
+    const currentText = finalTranscript + latestInterimTranscript;
+    if (currentText) {
+      latestRecognizedDraft = currentText;
+    }
+
+    updateSourceDisplay();
   };
 
   recognition.onerror = (event) => {
-    if (event.error === "no-speech" || event.error === "aborted") {
+    // iOS/webkit may fire no-speech, aborted, network after partial results.
+    // Do NOT overwrite sourceText if we already have recognized text.
+    if (event.error === "no-speech" || event.error === "aborted" || event.error === "network") {
       return;
     }
+  };
+
+  recognition.onend = () => {
+    // Recognition ended (either naturally or via stop()).
+    // Clear the fallback timer since onend fired.
+    clearRecognitionEndTimer();
+    // Clean up engine callbacks and reference — NOT the text variables.
+    cleanupRecognition();
+    // Determine final text and run translation flow.
+    finishRecognitionResult();
   };
 
   try {
@@ -274,29 +317,101 @@ function startRecognition() {
   }
 }
 
-function stopRecognition() {
+// Cleanup only clears recognition engine references. Never clears text variables.
+function cleanupRecognition() {
   if (recognition) {
-    try {
-      recognition.onresult = null;
-      recognition.onerror = null;
-      recognition.stop();
-    } catch (error) {
-      // May already be stopped.
-    }
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
     recognition = null;
   }
 }
 
+// Best-effort extraction of the recognized text, with 5-layer fallback for iOS/webkit.
+function resolveFinalSourceText() {
+  const text = uiText[currentMode];
+  const placeholders = [text.sourcePlaceholder, text.recognizing, text.translating];
+
+  // a. finalTranscript — clean final results from engine
+  if (finalTranscript) {
+    return finalTranscript;
+  }
+
+  // b. latestInterimTranscript — last interim text from engine
+  if (latestInterimTranscript) {
+    return latestInterimTranscript;
+  }
+
+  // c. latestRecognizedDraft — any non-empty transcript seen during recording
+  if (latestRecognizedDraft) {
+    return latestRecognizedDraft;
+  }
+
+  // d. lastDisplayedTranscript — whatever was shown in sourceText during recording
+  if (lastDisplayedTranscript) {
+    return lastDisplayedTranscript;
+  }
+
+  // e. sourceText current content, if it's not a placeholder
+  const currentSource = sourceText.textContent.trim();
+  if (currentSource && !placeholders.includes(currentSource)) {
+    return currentSource;
+  }
+
+  // Nothing — will trigger no-speech message.
+  return "";
+}
+
+function finishRecognitionResult() {
+  const text = uiText[currentMode];
+  const resolved = resolveFinalSourceText();
+
+  if (resolved) {
+    // Recognition succeeded — store as finalTranscript for downstream use.
+    finalTranscript = resolved;
+    sourceText.textContent = resolved;
+  } else if (!speechSupported) {
+    sourceText.textContent = text.speechNotSupported;
+  } else {
+    sourceText.textContent = text.noSpeech;
+  }
+
+  // Run mock translation flow (checks finalTranscript for success/failure).
+  runMockTranslation();
+}
+
+function stopRecognition() {
+  if (!recognition) {
+    return;
+  }
+
+  try {
+    recognition.stop();
+  } catch (error) {
+    // May already be stopped.
+  }
+
+  // Fallback: if onend doesn't fire within 1000ms, force cleanup and finish.
+  clearRecognitionEndTimer();
+  recognitionEndTimer = setTimeout(() => {
+    cleanupRecognition();
+    finishRecognitionResult();
+  }, 1000);
+}
+
 function resetContent() {
   clearFlowTimer();
-  stopRecognition();
+  clearRecognitionEndTimer();
+  cleanupRecognition();
   stopMicrophone();
   isListening = false;
   isProcessing = false;
   isRequestingMic = false;
   hasResult = false;
-  recognizedText = "";
-  hasRecognitionResult = false;
+  finalTranscript = "";
+  latestInterimTranscript = "";
+  latestRecognizedDraft = "";
+  lastDisplayedTranscript = "";
   setMicHint("");
   sourceText.textContent = uiText[currentMode].sourcePlaceholder;
   translatedText.textContent = uiText[currentMode].translatedPlaceholder;
@@ -305,40 +420,43 @@ function resetContent() {
   updateMainButton();
 }
 
-function runMockFlow(language) {
-  const sample = samples[language];
-  const text = uiText[language];
+function runMockTranslation() {
+  const hasRecognized = finalTranscript.length > 0;
+  const text = uiText[currentMode];
 
   isProcessing = true;
   setMicHint("");
-  playButton.disabled = true;
   mainSpeakButton.disabled = true;
-
-  // If speech was recognized, show it directly; otherwise show no-speech message.
-  if (hasRecognitionResult && recognizedText) {
-    sourceText.textContent = recognizedText;
-  } else if (!speechSupported) {
-    sourceText.textContent = text.speechNotSupported;
-  } else {
-    sourceText.textContent = text.noSpeech;
-  }
-
-  translatedText.textContent = text.translating;
   updateMainButton();
 
-  flowTimer = setTimeout(() => {
-    translatedText.textContent = sample.translated;
-    playButton.disabled = false;
+  if (hasRecognized) {
+    // Recognition succeeded — show mock translation.
+    translatedText.textContent = text.translating;
+    playButton.disabled = true;
+
+    flowTimer = setTimeout(() => {
+      translatedText.textContent = samples[currentMode].translated;
+      playButton.disabled = false;
+      mainSpeakButton.disabled = false;
+      isProcessing = false;
+      hasResult = true;
+      flowTimer = null;
+      updateMainButton();
+    }, 750);
+  } else {
+    // Recognition failed — show failure message, no translation.
+    translatedText.textContent = text.noTranslation;
+    playButton.disabled = true;
     mainSpeakButton.disabled = false;
     isProcessing = false;
-    hasResult = true;
-    flowTimer = null;
+    hasResult = false;
     updateMainButton();
-  }, 750);
+  }
 }
 
 async function startListening() {
   clearFlowTimer();
+  clearRecognitionEndTimer();
 
   isRequestingMic = true;
   setMicHint(uiText[currentMode].micRequesting, false, "requesting");
@@ -369,7 +487,7 @@ async function stopListening() {
   stopRecognition();
   await stopMicrophone();
   updateMainButton();
-  runMockFlow(currentMode);
+  // runMockTranslation is called from finishRecognitionResult after recognition ends.
 }
 
 function setMode(mode) {
