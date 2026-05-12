@@ -442,6 +442,15 @@ h2 {
   animation-delay: 0.3s;
 }
 
+.debug-line {
+  margin: 0;
+  font-size: 10px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 .privacy-note {
   display: none;
 }

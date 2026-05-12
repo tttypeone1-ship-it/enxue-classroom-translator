@@ -16,6 +16,7 @@ const listeningFeedback = document.querySelector("#listeningFeedback");
 const listeningFeedbackText = document.querySelector("#listeningFeedbackText");
 const micHint = document.querySelector("#micHint");
 const playButton = document.querySelector("#playButton");
+const debugLine = document.querySelector("#debugLine");
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const speechSupported = !!SpeechRecognition;
@@ -51,7 +52,7 @@ const uiText = {
     micDenied: "麦克风权限未开启，请允许浏览器使用麦克风",
     sourcePlaceholder: "选择方向后，点击下方圆形按钮。",
     translatedPlaceholder: "译文会显示在这里。",
-    recognizing: "正在识别语音...",
+    listeningSource: "正在聆听，请开始讲话",
     translating: "正在翻译...",
     noSpeech: "未识别到清晰语音，请再试一次",
     noTranslation: "请重新录制后再查看译文",
@@ -76,7 +77,7 @@ const uiText = {
     micDenied: "Microphone permission is not enabled. Please allow microphone access.",
     sourcePlaceholder: "Choose a direction, then tap the round button below.",
     translatedPlaceholder: "The translation will appear here.",
-    recognizing: "Recognizing speech...",
+    listeningSource: "Listening now. Please speak.",
     translating: "Translating...",
     noSpeech: "No clear speech recognized. Please try again.",
     noTranslation: "Please try again before viewing the translation.",
@@ -99,6 +100,7 @@ let volumeFrame = null;
 let micHintType = null;
 let recognition = null;
 let recognitionEndTimer = null;
+let recognitionStarted = false;
 
 // Speech recognition result accumulation — multi-layered for iOS/webkit resilience.
 // These are ONLY reset in startRecognition() (new recording start), never during stop/cleanup.
@@ -106,6 +108,19 @@ let finalTranscript = "";
 let latestInterimTranscript = "";
 let latestRecognizedDraft = "";
 let lastDisplayedTranscript = "";
+let lastError = "";
+
+// Build list of non-real-transcript values for the current mode.
+function getNonTranscriptValues() {
+  const t = uiText[currentMode];
+  return [
+    t.sourcePlaceholder,
+    t.listeningSource,
+    t.noSpeech,
+    t.speechNotSupported,
+    t.translating
+  ];
+}
 
 function clearFlowTimer() {
   if (flowTimer) {
@@ -119,6 +134,18 @@ function clearRecognitionEndTimer() {
     clearTimeout(recognitionEndTimer);
     recognitionEndTimer = null;
   }
+}
+
+function updateDebug() {
+  if (!debugLine) return;
+  debugLine.textContent =
+    "sup=" + speechSupported +
+    " started=" + recognitionStarted +
+    " final=" + finalTranscript.length +
+    " inter=" + latestInterimTranscript.length +
+    " draft=" + latestRecognizedDraft.length +
+    " disp=" + lastDisplayedTranscript.length +
+    " err=" + lastError;
 }
 
 function updateMainButton() {
@@ -241,15 +268,16 @@ async function connectMicrophone() {
 
 function updateSourceDisplay() {
   const displayed = finalTranscript + latestInterimTranscript;
-  sourceText.textContent = displayed;
-  // Snapshot every displayed text so it survives if engine stops without final.
   if (displayed) {
+    sourceText.textContent = displayed;
     lastDisplayedTranscript = displayed;
   }
 }
 
 function startRecognition() {
   if (!speechSupported) {
+    recognitionStarted = false;
+    updateDebug();
     return;
   }
 
@@ -258,6 +286,8 @@ function startRecognition() {
   latestInterimTranscript = "";
   latestRecognizedDraft = "";
   lastDisplayedTranscript = "";
+  lastError = "";
+  recognitionStarted = false;
 
   const lang = currentMode === "chinese" ? "zh-CN" : "en-US";
 
@@ -290,17 +320,19 @@ function startRecognition() {
     }
 
     updateSourceDisplay();
+    updateDebug();
   };
 
   recognition.onerror = (event) => {
+    lastError = event.error;
+    updateDebug();
     // iOS/webkit may fire no-speech, aborted, network after partial results.
-    // Do NOT overwrite sourceText if we already have recognized text.
-    if (event.error === "no-speech" || event.error === "aborted" || event.error === "network") {
-      return;
-    }
+    // Do NOT overwrite sourceText. Do NOT treat as failure if we already have text.
   };
 
   recognition.onend = () => {
+    recognitionStarted = false;
+    updateDebug();
     // Recognition ended (either naturally or via stop()).
     // Clear the fallback timer since onend fired.
     clearRecognitionEndTimer();
@@ -312,9 +344,12 @@ function startRecognition() {
 
   try {
     recognition.start();
+    recognitionStarted = true;
   } catch (error) {
-    // SpeechRecognition may fail to start in some browsers.
+    lastError = "start-exception: " + error.message;
+    recognitionStarted = false;
   }
+  updateDebug();
 }
 
 // Cleanup only clears recognition engine references. Never clears text variables.
@@ -327,10 +362,9 @@ function cleanupRecognition() {
   }
 }
 
-// Best-effort extraction of the recognized text, with 5-layer fallback for iOS/webkit.
-function resolveFinalSourceText() {
-  const text = uiText[currentMode];
-  const placeholders = [text.sourcePlaceholder, text.recognizing, text.translating];
+// Best-effort extraction of the recognized text, with multiple-layer fallback for iOS/webkit.
+function resolveFinalSourceText(capturedBeforeStop) {
+  const nonTranscripts = getNonTranscriptValues();
 
   // a. finalTranscript — clean final results from engine
   if (finalTranscript) {
@@ -352,38 +386,47 @@ function resolveFinalSourceText() {
     return lastDisplayedTranscript;
   }
 
-  // e. sourceText current content, if it's not a placeholder
-  const currentSource = sourceText.textContent.trim();
-  if (currentSource && !placeholders.includes(currentSource)) {
-    return currentSource;
+  // e. capturedBeforeStop — sourceText read by stopListening before stopping recognition
+  if (capturedBeforeStop && !nonTranscripts.includes(capturedBeforeStop)) {
+    return capturedBeforeStop;
   }
 
   // Nothing — will trigger no-speech message.
   return "";
 }
 
-function finishRecognitionResult() {
+function finishRecognitionResult(capturedBeforeStop) {
   const text = uiText[currentMode];
-  const resolved = resolveFinalSourceText();
+  const resolved = resolveFinalSourceText(capturedBeforeStop);
 
   if (resolved) {
     // Recognition succeeded — store as finalTranscript for downstream use.
     finalTranscript = resolved;
     sourceText.textContent = resolved;
+    // Pass the resolved text directly to runMockTranslation to avoid any race.
+    runMockTranslation(resolved);
   } else if (!speechSupported) {
     sourceText.textContent = text.speechNotSupported;
+    runMockTranslation("");
   } else {
     sourceText.textContent = text.noSpeech;
+    runMockTranslation("");
   }
-
-  // Run mock translation flow (checks finalTranscript for success/failure).
-  runMockTranslation();
 }
 
-function stopRecognition() {
+function stopRecognition(capturedSourceText) {
   if (!recognition) {
     return;
   }
+
+  // Override onend to carry capturedSourceText through to finishRecognitionResult.
+  recognition.onend = () => {
+    recognitionStarted = false;
+    updateDebug();
+    clearRecognitionEndTimer();
+    cleanupRecognition();
+    finishRecognitionResult(capturedSourceText);
+  };
 
   try {
     recognition.stop();
@@ -395,34 +438,41 @@ function stopRecognition() {
   clearRecognitionEndTimer();
   recognitionEndTimer = setTimeout(() => {
     cleanupRecognition();
-    finishRecognitionResult();
+    finishRecognitionResult(capturedSourceText);
   }, 1000);
 }
 
 function resetContent() {
   clearFlowTimer();
   clearRecognitionEndTimer();
+  // Stop recognition engine before cleaning up callbacks.
+  if (recognition) {
+    try { recognition.stop(); } catch (error) { /* ignore */ }
+  }
   cleanupRecognition();
   stopMicrophone();
   isListening = false;
   isProcessing = false;
   isRequestingMic = false;
   hasResult = false;
+  recognitionStarted = false;
   finalTranscript = "";
   latestInterimTranscript = "";
   latestRecognizedDraft = "";
   lastDisplayedTranscript = "";
+  lastError = "";
   setMicHint("");
   sourceText.textContent = uiText[currentMode].sourcePlaceholder;
   translatedText.textContent = uiText[currentMode].translatedPlaceholder;
   playButton.disabled = true;
   playButton.textContent = uiText[currentMode].play;
   updateMainButton();
+  updateDebug();
 }
 
-function runMockTranslation() {
-  const hasRecognized = finalTranscript.length > 0;
+function runMockTranslation(recognizedSourceText) {
   const text = uiText[currentMode];
+  const hasRecognized = recognizedSourceText.length > 0;
 
   isProcessing = true;
   setMicHint("");
@@ -430,7 +480,8 @@ function runMockTranslation() {
   updateMainButton();
 
   if (hasRecognized) {
-    // Recognition succeeded — show mock translation.
+    // Recognition succeeded — show recognized text and mock translation.
+    sourceText.textContent = recognizedSourceText;
     translatedText.textContent = text.translating;
     playButton.disabled = true;
 
@@ -466,6 +517,8 @@ async function startListening() {
   try {
     await connectMicrophone();
     isListening = true;
+    // Show "listening" in source area while recording.
+    sourceText.textContent = uiText[currentMode].listeningSource;
     if (speechSupported) {
       setMicHint(uiText[currentMode].micConnected, false, "connected");
     } else {
@@ -484,7 +537,12 @@ async function startListening() {
 async function stopListening() {
   isListening = false;
   setMicHint("");
-  stopRecognition();
+
+  // Capture sourceText BEFORE stopping recognition, in case engine callbacks
+  // overwrite it during the stop sequence.
+  const capturedSourceText = sourceText.textContent.trim();
+
+  stopRecognition(capturedSourceText);
   await stopMicrophone();
   updateMainButton();
   // runMockTranslation is called from finishRecognitionResult after recognition ends.
@@ -556,3 +614,4 @@ playButton.addEventListener("click", () => {
 });
 
 updateMainButton();
+updateDebug();
